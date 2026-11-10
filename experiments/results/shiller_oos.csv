@@ -1,0 +1,21 @@
+horizon_months,predictor,label,mode,n_forecasts,first,oos_r2,clark_west_t
+1,log_ep,log earnings/price,naive,641,1970-01-31,-0.0120876,-0.218659
+1,log_ep,log earnings/price,point-in-time,641,1970-01-31,-0.0104721,-0.471533
+1,log_dp,log dividend/price,naive,641,1970-01-31,-0.00210433,0.28285
+1,log_dp,log dividend/price,point-in-time,641,1970-01-31,-0.00145998,0.271656
+1,earnings_growth,12m earnings growth,naive,641,1970-01-31,-0.0078751,-0.14991
+1,earnings_growth,12m earnings growth,point-in-time,641,1970-01-31,-0.00390319,-0.445245
+1,inflation,12m CPI inflation,naive,641,1970-01-31,0.00930119,2.30248
+1,inflation,12m CPI inflation,point-in-time,641,1970-01-31,0.00680139,1.9263
+1,long_rate,10y Treasury yield,naive,641,1970-01-31,-0.00762732,0.928749
+1,long_rate,10y Treasury yield,point-in-time,641,1970-01-31,-0.00762732,0.928749
+12,log_ep,log earnings/price,naive,630,1970-01-31,-0.14718,0.325195
+12,log_ep,log earnings/price,point-in-time,630,1970-01-31,-0.124547,0.511317
+12,log_dp,log dividend/price,naive,630,1970-01-31,-0.076173,0.523368
+12,log_dp,log dividend/price,point-in-time,630,1970-01-31,-0.0757834,0.55548
+12,earnings_growth,12m earnings growth,naive,630,1970-01-31,-0.0560433,-0.790602
+12,earnings_growth,12m earnings growth,point-in-time,630,1970-01-31,-0.0258893,-1.25837
+12,inflation,12m CPI inflation,naive,630,1970-01-31,0.00472284,0.976635
+12,inflation,12m CPI inflation,point-in-time,630,1970-01-31,-0.000559782,-0.0239169
+12,long_rate,10y Treasury yield,naive,630,1970-01-31,-0.101396,-0.240652
+12,long_rate,10y Treasury yield,point-in-time,630,1970-01-31,-0.101396,-0.240652

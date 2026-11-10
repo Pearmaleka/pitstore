@@ -1,0 +1,123 @@
+{
+  "data": "data/shiller_sp500_monthly.csv",
+  "sample": [
+    "1927-12-31",
+    "2023-06-30"
+  ],
+  "oos_start": "1970-01-31",
+  "naive_lead_over_publication": {
+    "earnings": {
+      "share_of_months_unpublished": 1.0,
+      "median_days_before_publication": 120.5,
+      "max_days_before_publication": 151.0
+    },
+    "dividend": {
+      "share_of_months_unpublished": 1.0,
+      "median_days_before_publication": 60.5,
+      "max_days_before_publication": 91.0
+    },
+    "inflation": {
+      "share_of_months_unpublished": 1.0,
+      "median_days_before_publication": 15.0,
+      "max_days_before_publication": 15.0
+    }
+  },
+  "point_in_time_median_age_days": {
+    "earnings": 122.5,
+    "dividend": 61.0,
+    "inflation": 31.0
+  },
+  "describe": [
+    {
+      "feature": "dividend",
+      "entities": 1,
+      "events": 1830,
+      "rows": 1830,
+      "revisions": 0,
+      "first_event": "1871-01-31",
+      "last_event": "2023-06-30",
+      "last_update": "2023-07-30",
+      "median_lag_days": 60.5,
+      "max_lag_days": 91.0,
+      "mean_abs_revision": 0.0,
+      "description": "",
+      "unit": ""
+    },
+    {
+      "feature": "earnings",
+      "entities": 1,
+      "events": 1830,
+      "rows": 1830,
+      "revisions": 0,
+      "first_event": "1871-01-31",
+      "last_event": "2023-06-30",
+      "last_update": "2023-09-28",
+      "median_lag_days": 120.5,
+      "max_lag_days": 151.0,
+      "mean_abs_revision": 0.0,
+      "description": "",
+      "unit": ""
+    },
+    {
+      "feature": "earnings_growth",
+      "entities": 1,
+      "events": 1818,
+      "rows": 1818,
+      "revisions": 0,
+      "first_event": "1872-01-31",
+      "last_event": "2023-06-30",
+      "last_update": "2023-09-28",
+      "median_lag_days": 120.5,
+      "max_lag_days": 151.0,
+      "mean_abs_revision": 0.0,
+      "description": "",
+      "unit": ""
+    },
+    {
+      "feature": "inflation",
+      "entities": 1,
+      "events": 1821,
+      "rows": 1821,
+      "revisions": 0,
+      "first_event": "1872-01-31",
+      "last_event": "2023-09-30",
+      "last_update": "2023-10-15",
+      "median_lag_days": 15.0,
+      "max_lag_days": 15.0,
+      "mean_abs_revision": 0.0,
+      "description": "",
+      "unit": ""
+    },
+    {
+      "feature": "long_rate",
+      "entities": 1,
+      "events": 1833,
+      "rows": 1833,
+      "revisions": 0,
+      "first_event": "1871-01-31",
+      "last_event": "2023-09-30",
+      "last_update": "2023-09-30",
+      "median_lag_days": 0.0,
+      "max_lag_days": 0.0,
+      "mean_abs_revision": 0.0,
+      "description": "",
+      "unit": ""
+    },
+    {
+      "feature": "price",
+      "entities": 1,
+      "events": 1869,
+      "rows": 1869,
+      "revisions": 0,
+      "first_event": "1871-01-31",
+      "last_event": "2026-09-30",
+      "last_update": "2026-09-30",
+      "median_lag_days": 0.0,
+      "max_lag_days": 0.0,
+      "mean_abs_revision": 0.0,
+      "description": "",
+      "unit": ""
+    }
+  ],
+  "seconds": 2.164658810999981
+}
