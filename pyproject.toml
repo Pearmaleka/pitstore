@@ -36,6 +36,9 @@ dev = [
   "matplotlib>=3.7",
 ]
 
+[project.scripts]
+pitstore = "pitstore.cli:main"
+
 [project.urls]
 Repository = "https://github.com/Pearmaleka/clone"
 
