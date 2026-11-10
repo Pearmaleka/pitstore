@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pitstore"
+version = "0.1.0"
+description = "A point-in-time feature store on DuckDB: training data that only contains what was known at the time."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Le Nam Khanh" }]
+keywords = ["feature store", "point-in-time", "bitemporal", "duckdb", "look-ahead bias", "time series"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = ["duckdb>=1.1", "pandas>=2.2", "numpy>=1.24"]
+
+[project.optional-dependencies]
+experiments = ["matplotlib>=3.7"]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "hypothesis>=6.90",
+  "ruff>=0.6",
+  "mypy>=1.10",
+  "matplotlib>=3.7",
+]
+
+[project.urls]
+Repository = "https://github.com/Pearmaleka/clone"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pitstore"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["pitstore"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "NPY", "SIM", "RUF"]
+ignore = ["RUF002", "RUF003"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true
