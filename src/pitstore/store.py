@@ -233,7 +233,8 @@ class FeatureStore:
         self.con.register("_incoming", batch)
         try:
             self.con.execute("BEGIN TRANSACTION")
-            conflicts = self.con.execute(_sql.CONFLICTS, params).df()
+            self.con.execute(_sql.STAGE, params)
+            conflicts = self.con.execute(_sql.CONFLICTS).df()
             if len(conflicts):
                 self.con.execute("ROLLBACK")
                 first = conflicts.iloc[0]
@@ -242,11 +243,12 @@ class FeatureStore:
                     f"{first.event_time}, available {first.available_at}: stored {first.stored}, "
                     f"incoming {first.incoming}); add revisions as rows with a later available_at"
                 )
-            before = self._count(name)
-            self.con.execute(_sql.INSERT_NEW, params)
-            inserted = self._count(name) - before
+            row = self.con.execute(_sql.COUNT_NEW).fetchone()
+            inserted = int(row[0]) if row else 0
             if inserted:
-                for statement in _sql.REFRESH_TIMELINE_TOUCHED:
+                self.con.execute(_sql.INSERT_NEW, params)
+                self.con.execute(_sql.STAGE_STARTS)
+                for statement in _sql.REFRESH_TIMELINE:
                     self.con.execute(statement, params)
             self.con.execute("COMMIT")
         except duckdb.Error:
@@ -254,6 +256,7 @@ class FeatureStore:
             raise
         finally:
             self.con.unregister("_incoming")
+            self.con.execute("DROP TABLE IF EXISTS _staged; DROP TABLE IF EXISTS _starts")
         return IngestReport(
             feature=name,
             received=received,
@@ -273,12 +276,6 @@ class FeatureStore:
         for n in names:
             for statement in _sql.REBUILD_TIMELINE:
                 self.con.execute(statement, {"feature": n})
-
-    def _count(self, name: str) -> int:
-        row = self.con.execute(
-            "SELECT count(*) FROM feature_values WHERE feature = $f", {"f": name}
-        ).fetchone()
-        return int(row[0]) if row else 0
 
     # -- reading -------------------------------------------------------------------------
 
