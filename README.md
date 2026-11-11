@@ -1,6 +1,6 @@
 # pitstore
 
-[![CI](https://github.com/Pearmaleka/clone/actions/workflows/ci.yml/badge.svg)](https://github.com/Pearmaleka/clone/actions/workflows/ci.yml)
+[![CI](https://github.com/Pearmaleka/pitstore/actions/workflows/ci.yml/badge.svg)](https://github.com/Pearmaleka/pitstore/actions/workflows/ci.yml)
 
 A point-in-time feature store on DuckDB. It keeps every published version of every observation
 and joins features to training rows using only what was known at each row's timestamp.
@@ -14,7 +14,7 @@ answers "what did we know at time t?" with a single join.
 ## Quick start
 
 ```bash
-pip install "git+https://github.com/Pearmaleka/clone"
+pip install "git+https://github.com/Pearmaleka/pitstore"
 ```
 
 ```python

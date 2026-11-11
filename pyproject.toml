@@ -40,7 +40,7 @@ dev = [
 pitstore = "pitstore.cli:main"
 
 [project.urls]
-Repository = "https://github.com/Pearmaleka/clone"
+Repository = "https://github.com/Pearmaleka/pitstore"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pitstore"]
