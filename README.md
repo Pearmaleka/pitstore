@@ -83,7 +83,8 @@ quarter is published after the first release of a new quarter, it would return t
 pitstore sorts each entity's rows by `available_at` and keeps a running maximum of `event_time`.
 Only rows that reach the running maximum can ever be an answer; revisions of older events never
 can. Those rows form a `timeline` table, and the query is one `ASOF LEFT JOIN` against it. The
-timeline is updated inside the ingest transaction, for the entities the batch touches only.
+timeline is updated inside the ingest transaction, for the entities a batch touches and only
+from the batch's earliest publication time onwards.
 [docs/design.md](docs/design.md) has the schema, the argument for correctness and the
 alternatives that were tried.
 
@@ -163,19 +164,33 @@ What this shows, and what it does not:
 ### 3. Speed
 
 [`benchmarks/bench_asof.py`](benchmarks/bench_asof.py), 1,000 entities with one to four versions
-per event, on a 2-vCPU cloud VM with 7 GB of RAM. The pandas column is the same algorithm written
-with `cummax` and `merge_asof`. All implementations return identical results.
+per event, on a 2-vCPU cloud VM with 7 GB of RAM (timings on this shared machine vary by about
+30% between runs). The pandas column is the same algorithm written with `cummax` and
+`merge_asof`. All implementations return identical results.
 
 | History rows | Spine rows | Bulk ingest | Update, 1,000 rows | pitstore query | pandas | Brute force |
 |---:|---:|---:|---:|---:|---:|---:|
-| 11,037 | 2,000 | 0.05 s | 0.02 s | 0.011 s | 0.012 s | 2.2 s (extrapolated) |
-| 100,329 | 20,000 | 0.22 s | 0.04 s | 0.024 s | 0.042 s | |
-| 947,811 | 200,000 | 1.99 s | 0.09 s | 0.087 s | 0.27 s | |
-| 3,848,505 | 1,000,000 | 9.34 s | 0.30 s | 0.36 s | 1.10 s | |
+| 11,037 | 2,000 | 0.06 s | 0.03 s | 0.014 s | 0.015 s | 2.6 s (extrapolated) |
+| 100,329 | 20,000 | 0.30 s | 0.03 s | 0.027 s | 0.052 s | |
+| 947,811 | 200,000 | 2.97 s | 0.05 s | 0.12 s | 0.36 s | |
+| 3,848,505 | 1,000,000 | 11.0 s | 0.06 s | 0.46 s | 1.47 s | |
 
 The query is about three times faster than pandas on large inputs, because the expensive step
 (the running maximum) is done once at ingest. That is where the cost moves: a bulk load of
-3.8 million rows takes 9 seconds, while a daily batch only recomputes the entities it touches.
+3.8 million rows takes 11 seconds.
+
+An update only recomputes the timeline of each touched entity from the batch's earliest
+publication time, so its cost depends on how far back the batch reaches rather than on the size
+of the store. On a single long series (one entity, an event per minute):
+
+| History rows | Bulk ingest | Append, 1,000 rows | Backfill, 1,000 rows into the middle |
+|---:|---:|---:|---:|
+| 103,905 | 0.25 s | 0.03 s | 0.05 s |
+| 1,003,940 | 2.15 s | 0.04 s | 0.18 s |
+| 4,003,599 | 7.82 s | 0.04 s | 0.52 s |
+
+Recomputing the whole entity, as the first version did, took 1.2 s for the same append on the
+largest series.
 
 ## Testing
 
@@ -194,8 +209,8 @@ DuckDB, pandas and NumPy.
 
 - DuckDB allows one writing process per database file.
 - Values are stored as `DOUBLE`; categorical features are not supported.
-- An update recomputes the timeline for the touched entities over their full history. A single
-  entity with millions of rows would pay for all of them on every batch.
+- An update recomputes each touched entity's timeline from the batch's earliest publication
+  time. Appends are cheap; a backfill of old publication times recomputes everything after them.
 - There is no delete. A wrong value has to be corrected by publishing a new version.
 
 ## Reproducing
