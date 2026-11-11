@@ -51,7 +51,9 @@ def _to_timestamps(values: Any, what: str) -> pd.Series:
     ts = pd.to_datetime(pd.Series(values), errors="raise")
     if getattr(ts.dt, "tz", None) is not None:
         ts = ts.dt.tz_convert("UTC").dt.tz_localize(None)
-    ts = ts.astype("datetime64[ns]")
+    # DuckDB's TIMESTAMP has microsecond resolution. Matching it here means joins compare like
+    # with like; a nanosecond column would make DuckDB cast the stored side on every query.
+    ts = ts.astype("datetime64[us]")
     if ts.isna().any():
         raise ValueError(f"{what} contains missing timestamps")
     return ts.reset_index(drop=True)
