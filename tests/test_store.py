@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pitstore import FeatureStore, monthly_release
+from pitstore import FeatureStore, monthly_release, reference
 
 
 @pytest.fixture
@@ -56,6 +56,44 @@ def test_revision_of_an_older_event_does_not_replace_the_latest_event(store):
     assert out.loc[0, "gdp"] == 2.8  # still Q2, not the newer revision of Q1
     assert out.loc[0, "gdp__event_time"] == pd.Timestamp("2024-06-30")
     assert out.loc[0, "gdp__available_at"] == pd.Timestamp("2024-07-25")
+
+
+def test_updates_keep_the_timeline_correct(store, gdp):
+    """Appends, a backfill before existing releases and a late revision of an older event."""
+    batches = [
+        # Q2 revised and Q3 released: the refresh starts at 26 September, seeded with Q2.
+        {
+            "quarter_end": ["2024-06-30", "2024-09-30"],
+            "released": ["2024-09-26", "2024-10-30"],
+            "growth": [3.1, 2.0],
+        },
+        # A flash estimate of Q1 published before every stored row: recompute everything.
+        {"quarter_end": ["2024-03-31"], "released": ["2024-04-20"], "growth": [1.5]},
+        # A revision of Q1 after Q3 is out: stored, but never the point-in-time answer.
+        {"quarter_end": ["2024-03-31"], "released": ["2024-11-15"], "growth": [1.2]},
+    ]
+    history = gdp
+    dates = pd.date_range("2024-04-01", "2024-12-31", freq="D")
+    for batch in map(pd.DataFrame, batches):
+        store.ingest(
+            "gdp", batch, event_time="quarter_end", value="growth", available_at="released"
+        )
+        history = pd.concat([history, batch], ignore_index=True)
+        got = store.as_of(pd.DataFrame({"ts": dates}), ["gdp"])["gdp"].to_numpy()
+        ref = history.rename(
+            columns={"quarter_end": "event_time", "released": "available_at", "growth": "value"}
+        ).assign(
+            entity="_",
+            event_time=lambda d: pd.to_datetime(d["event_time"]),
+            available_at=lambda d: pd.to_datetime(d["available_at"]),
+        )
+        want = reference.as_of(ref, pd.DataFrame({"entity": "_", "ts": dates}))
+        np.testing.assert_array_equal(got, want)
+    before = store.raw("SELECT * FROM timeline ORDER BY ALL")
+    store.rebuild_timeline()
+    pd.testing.assert_frame_equal(before, store.raw("SELECT * FROM timeline ORDER BY ALL"))
+    out = store.as_of(spine("2024-04-22", "2024-10-01", "2024-12-01"), ["gdp"])
+    np.testing.assert_array_equal(out["gdp"].to_numpy(), [1.5, 3.1, 2.0])
 
 
 def test_metadata_and_max_age(store):

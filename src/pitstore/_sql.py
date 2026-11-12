@@ -28,26 +28,30 @@ CREATE TABLE IF NOT EXISTS timeline (
 );
 """
 
-# Values in an incoming batch whose key already exists with a different value.
-CONFLICTS = """
-SELECT i.entity, i.event_time, i.available_at, f.value AS stored, i.value AS incoming
+# One lookup of the incoming batch against stored values. Rows with a stored value are either
+# exact repeats (ignored) or conflicts (rejected); rows without one are new. Everything
+# downstream works from this table, so re-sent rows cost nothing.
+STAGE = """
+CREATE OR REPLACE TEMP TABLE _staged AS
+SELECT i.entity, i.event_time, i.available_at, i.value, f.value AS stored
 FROM _incoming i
-JOIN feature_values f
+LEFT JOIN feature_values f
   ON f.feature = $feature AND f.entity = i.entity
  AND f.event_time = i.event_time AND f.available_at = i.available_at
-WHERE f.value <> i.value
+"""
+
+CONFLICTS = """
+SELECT entity, event_time, available_at, stored, value AS incoming
+FROM _staged
+WHERE stored IS NOT NULL AND stored <> value
 LIMIT 5
 """
 
+COUNT_NEW = "SELECT count(*) FROM _staged WHERE stored IS NULL"
+
 INSERT_NEW = """
 INSERT INTO feature_values (feature, entity, event_time, available_at, value)
-SELECT $feature, i.entity, i.event_time, i.available_at, i.value
-FROM _incoming i
-WHERE NOT EXISTS (
-    SELECT 1 FROM feature_values f
-    WHERE f.feature = $feature AND f.entity = i.entity
-      AND f.event_time = i.event_time AND f.available_at = i.available_at
-)
+SELECT $feature, entity, event_time, available_at, value FROM _staged WHERE stored IS NULL
 """
 
 # Point-in-time semantics. At time t the answer is the value of the latest event known at t,
@@ -63,7 +67,7 @@ WITH ordered AS (
                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
            ) AS latest_known_event
     FROM feature_values
-    WHERE feature = $feature {entity_filter}
+    WHERE feature = $feature
 )
 SELECT $feature AS feature, entity, available_at,
        max(event_time) AS event_time,
@@ -73,17 +77,60 @@ WHERE event_time = latest_known_event
 GROUP BY entity, available_at
 """
 
-_TOUCHED = "AND entity IN (SELECT DISTINCT entity FROM _incoming)"
+# Incremental refresh. New rows can only change the timeline from their own publication time
+# onwards, so for each touched entity the rows published before its earliest new row are kept.
+# The rows after it are recomputed with the running maximum seeded by the last kept row: by
+# construction that row's event time is the latest event known just before the change.
+# An append-only batch therefore costs a scan of the entity, not a sort of its whole history.
+STAGE_STARTS = """
+CREATE OR REPLACE TEMP TABLE _starts AS
+SELECT entity, min(available_at) AS start FROM _staged WHERE stored IS NULL GROUP BY entity
+"""
 
-# DuckDB binds parameters only in the last statement of a query, so each refresh is a pair.
-REFRESH_TIMELINE_TOUCHED = (
-    "DELETE FROM timeline WHERE feature = $feature " + _TOUCHED,
-    "INSERT INTO timeline " + _TIMELINE_ROWS.format(entity_filter=_TOUCHED),
+_DELETE_FROM_STARTS = """
+DELETE FROM timeline t
+USING _starts s
+WHERE t.feature = $feature AND t.entity = s.entity AND t.available_at >= s.start
+"""
+
+_TIMELINE_ROWS_FROM_STARTS = """
+WITH seed AS (
+    SELECT s.entity, s.start, max(t.event_time) AS prior_latest
+    FROM _starts s
+    LEFT JOIN timeline t
+      ON t.feature = $feature AND t.entity = s.entity AND t.available_at < s.start
+    GROUP BY s.entity, s.start
+),
+ordered AS (
+    SELECT v.entity, v.event_time, v.available_at, v.value, d.prior_latest,
+           max(v.event_time) OVER (
+               PARTITION BY v.entity ORDER BY v.available_at, v.event_time
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+           ) AS latest_since_start
+    FROM feature_values v
+    JOIN seed d ON v.entity = d.entity AND v.available_at >= d.start
+    WHERE v.feature = $feature
+)
+SELECT $feature AS feature, entity, available_at,
+       max(event_time) AS event_time,
+       arg_max(value, event_time) AS value
+FROM ordered
+WHERE event_time = latest_since_start
+  AND (prior_latest IS NULL OR event_time >= prior_latest)
+GROUP BY entity, available_at
+"""
+
+# DuckDB binds parameters only in the last statement of a query, so each step is a statement.
+REFRESH_TIMELINE = (
+    _DELETE_FROM_STARTS,
+    "INSERT INTO timeline " + _TIMELINE_ROWS_FROM_STARTS,
 )
 
+# The full rebuild deliberately uses the unseeded query above: the tests check that the two
+# paths produce identical tables.
 REBUILD_TIMELINE = (
     "DELETE FROM timeline WHERE feature = $feature",
-    "INSERT INTO timeline " + _TIMELINE_ROWS.format(entity_filter=""),
+    "INSERT INTO timeline " + _TIMELINE_ROWS,
 )
 
 POINT_IN_TIME = """

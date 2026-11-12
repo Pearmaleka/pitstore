@@ -23,7 +23,10 @@ A revision is a new row with the same `event_time` and a later `available_at`. R
 updated or deleted, so any past state of the data can be reconstructed. Series without an
 entity (a single macro indicator, say) are stored under the entity `"_"`.
 
-All timestamps are naive UTC. Time-zone-aware input is converted on the way in.
+All timestamps are naive UTC. Time-zone-aware input is converted on the way in, and every
+timestamp is cut to microseconds, DuckDB's `TIMESTAMP` resolution. Batches and spines are passed
+to DuckDB at that resolution too: a nanosecond column makes DuckDB cast the stored side of every
+join, which cost more than the rest of a small update.
 
 ## Point-in-time semantics
 
@@ -77,41 +80,58 @@ and m spine rows, regardless of how many revisions were dropped from the timelin
 
 ### Keeping the timeline current
 
-The timeline is derived data and has to change whenever `feature_values` does. Inside the
+The timeline is derived data and has to change whenever `feature_values` does. A new row can
+only change answers from its own publication time onwards, so for each entity in a batch, the
+timeline rows published before the entity's earliest new row stay as they are. Inside the
 ingest transaction, after the new rows are inserted:
 
 ```sql
-DELETE FROM timeline
-WHERE feature = $feature AND entity IN (SELECT DISTINCT entity FROM _incoming);
+-- per touched entity, the earliest publication time among the new rows
+CREATE TEMP TABLE _starts AS
+SELECT entity, min(available_at) AS start FROM _staged WHERE stored IS NULL GROUP BY entity;
+
+DELETE FROM timeline t USING _starts s
+WHERE t.feature = $feature AND t.entity = s.entity AND t.available_at >= s.start;
 
 INSERT INTO timeline
-SELECT ... -- the running-maximum query, restricted to the same entities
+SELECT ...  -- the running-maximum query over rows with available_at >= start,
+            -- seeded with the latest event known just before start
 ```
 
-Only touched entities are recomputed, which is why a 1,000-row update on a 3.8-million-row store
-takes 0.3 s instead of a full rebuild. The cost is proportional to the full history of each
-touched entity, not to the size of the batch; an entity with a very long history pays for all of
-it on every update. Appending to the timeline directly would avoid that, but a late revision of
-an old event can change which rows are defining, so the simple version was kept.
+The seed is the `event_time` of the last timeline row that was kept. That is the running
+maximum just before `start`: along the timeline `event_time` never decreases, and between two
+timeline rows no row reaches a new maximum. A recomputed row is defining if it reaches the
+running maximum taken from `start` and is not older than the seed.
 
-`rebuild_timeline()` recomputes everything. A property test ingests random histories in random
-batches and checks that the incrementally maintained table equals a rebuild.
+The cost of an update therefore depends on how far back the batch reaches, not on how long the
+history is. On a single series of 4 million rows, appending 1,000 rows takes 0.04 s (1.2 s
+when the whole entity was recomputed); a backfill of 1,000 rows into the middle of the history
+still recomputes the half after it, in 0.5 s.
+
+`rebuild_timeline()` recomputes everything with the unseeded query. The two paths are separate
+implementations of the same definition, and the tests check them against each other: a property
+test ingests random histories in shuffled batches and compares the maintained table with a
+rebuild, and a unit test covers appends, a backfill before every stored row and a late revision
+of an older event.
 
 ### Versions that were tried first
 
 1. A correlated subquery per spine row. Correct, and the basis of `reference.py`, but quadratic.
 2. The running-maximum window computed inside every query. Correct, but each query paid for a
    sort of the whole history; on a million rows it was slower than pandas.
-3. The materialised timeline above.
+3. The materialised timeline, recomputed in full for every entity a batch touched. Correct,
+   but a daily update of one long series paid for a sort of its entire history.
+4. The materialised timeline with the seeded refresh above.
 
 ## Ingestion guarantees
 
 `ingest` registers the batch as a DuckDB view and runs, in one transaction:
 
-1. a conflict check: if any incoming (feature, entity, `event_time`, `available_at`) is already
-   stored with a different value, the transaction is rolled back and nothing is written;
-2. an insert of the rows not yet stored;
-3. the timeline refresh, if anything was inserted.
+1. one left join of the batch against stored values into a temporary table `_staged`;
+2. a conflict check on it: if any incoming (feature, entity, `event_time`, `available_at`) is
+   already stored with a different value, the transaction is rolled back and nothing is written;
+3. an insert of the rows not yet stored;
+4. the timeline refresh, if anything was inserted.
 
 Before that, in pandas:
 

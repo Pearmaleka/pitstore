@@ -91,7 +91,7 @@ def test_point_in_time_never_uses_unpublished_data(hist, sp):
     store.close()
 
 
-@settings(max_examples=60, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(
     hist=histories(),
     sp=spines(),
